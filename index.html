@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#15171b">
+<title>Próxima partida</title>
+<style>
+:root{color-scheme:dark;--bg:#15171b;--panel:#1c1f25;--line:#363a45;--ink:#f1f2f3;--muted:#b0b5c0;--accent:#e1fa75;--danger:#ffb7b0;font-family:"Inter","Segoe UI",sans-serif}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);min-width:280px}
+button,input,select{font:inherit}
+button,.button{border:1px solid var(--line);background:#272a32;color:var(--ink);border-radius:8px;padding:.62rem .85rem;cursor:pointer;font-weight:650;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:.42rem}
+button:hover,.button:hover{background:#353943}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.55;cursor:wait}
+.primary{background:var(--accent);color:#1b2209;border-color:var(--accent)}
+.primary:hover{background:#f0ffa6}
+.ghost{background:transparent}
+.danger{color:var(--danger)}
+a{color:var(--accent)}
+p{line-height:1.55}
+h1,h2,h3,p{margin-top:0}
+[hidden]{display:none!important}
+.wrap{width:min(1100px,calc(100% - 48px));margin-inline:auto}
+header{border-bottom:1px solid var(--line)}
+.top{min-height:66px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-weight:800;letter-spacing:-.03em;display:flex;gap:10px;align-items:center}
+.brand-mark{width:25px;height:25px;background:var(--accent);color:#1b2209;border-radius:7px;display:grid;place-items:center;font-size:.8rem}
+.tools,.actions,.profiles,.tabbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tools button{font-size:.84rem}
+.sync{display:inline-flex;gap:7px;align-items:center;color:var(--muted);font-size:.8rem}
+.sync::before{content:"";width:7px;height:7px;border-radius:50%;background:#a4aab7}
+.sync[data-online="true"]::before{background:var(--accent)}
+main{padding-block:32px 56px}
+.hero{position:relative;overflow:hidden;isolation:isolate;border:1px solid #3d4531;border-radius:16px;padding:clamp(21px,4vw,40px);background:#222822;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#202622 24%,transparent),repeating-linear-gradient(90deg,transparent 0 35px,#c8fb7118 36px 37px),repeating-linear-gradient(0deg,transparent 0 35px,#c8fb7118 36px 37px);mask-image:linear-gradient(90deg,transparent 15%,black)}
+.hero h1{font-size:clamp(2.3rem,6vw,4.25rem);line-height:.99;margin:0 0 12px;letter-spacing:-.07em}
+.hero p{color:#d1d6c9;margin:0}
+.hero .button,.hero button{white-space:nowrap}
+.profile-line{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:20px 0}
+.profile-line strong{font-size:.86rem;color:var(--muted)}
+.profiles button[aria-pressed="true"],.voted{background:#333d22;color:var(--accent);border-color:#62723c}
+.profiles button{font-size:.82rem}
+.avatar{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#3f4929;color:#e7fbab;font-size:.75rem;font-weight:800;flex:none}
+.avatar.second{background:#433a60;color:#eadcff}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:20px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;min-width:0}
+.panel-title{padding:17px 19px;border-bottom:1px solid var(--line)}
+.panel-title h2{font-size:1.05rem;margin:0}
+.tabbar{padding:7px 10px;gap:4px;border-bottom:1px solid var(--line)}
+.tabbar button{background:transparent;border-color:transparent;color:var(--muted);font-size:.88rem}
+.tabbar button[aria-pressed="true"]{background:#30333c;color:var(--ink)}
+.count{font-size:.73rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.empty{padding:42px 20px;text-align:center}
+.empty-mark{display:grid;place-items:center;width:42px;height:42px;margin:0 auto 12px;border:1px solid #566344;border-radius:12px;color:var(--accent);background:#303a25;font-size:1.5rem}
+.empty h3{font-size:1rem;margin-bottom:5px}
+.empty p,.sidebar p{font-size:.88rem;color:var(--muted);margin:0}
+.sidebar{display:grid;gap:15px}
+.aside-body{padding:16px 19px}
+.playing{color:var(--accent);font-size:1.02rem;margin:0 0 9px;overflow-wrap:anywhere}
+.ballot{display:flex;align-items:center;gap:9px;font-size:.84rem;padding-block:8px}
+.ballot span:last-child{margin-left:auto;text-align:right;color:var(--muted);overflow-wrap:anywhere}
+.ballot-result{border-top:1px solid var(--line);margin-top:8px!important;padding-top:12px}
+.game{display:grid;grid-template-columns:106px minmax(0,1fr);gap:14px;padding:15px 16px}
+.game+.game{border-top:1px solid var(--line)}
+.cover{width:106px;aspect-ratio:460/215;position:relative;overflow:hidden;display:grid;place-items:center;border:1px solid #484d59;border-radius:7px;background:repeating-linear-gradient(135deg,#2d323c 0 10px,#2a2e36 10px 20px);color:var(--muted);font-size:.72rem}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.game h3{font-size:1.02rem;margin-bottom:5px;overflow-wrap:anywhere}
+.meta{font-size:.78rem;color:var(--muted);display:flex;gap:5px 12px;flex-wrap:wrap;margin-bottom:11px}
+.game .actions button,.game .actions .button,.sidebar .actions button{font-size:.78rem;padding:.44rem .6rem}
+.rating{display:flex;flex-wrap:wrap;gap:8px 13px;align-items:center;margin-top:10px;font-size:.82rem;color:var(--muted)}
+.rating select{padding:4px 6px;width:auto}
+.pill{color:#dceaaa}
+dialog{width:min(530px,calc(100% - 26px));max-height:calc(100% - 30px);color:var(--ink);background:#20232a;border:1px solid #555b69;border-radius:14px;padding:22px;overscroll-behavior:contain}
+dialog::backdrop{background:#090b10cc}
+.dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+.dialog-head h2{margin:0;font-size:1.25rem}
+label{display:grid;gap:6px;font-size:.88rem;font-weight:650;margin-bottom:13px}
+input,select{width:100%;background:#171a20;color:var(--ink);border:1px solid #4a505d;border-radius:7px;padding:.62rem}
+small,.hint{color:var(--muted);font-weight:400}
+ol{padding-left:1.3rem;line-height:1.5}
+ol li{margin-bottom:7px}
+details{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
+summary{cursor:pointer;color:var(--accent);font-weight:650}
+details .fields{margin-top:14px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dialog-error{color:var(--danger);font-size:.87rem;margin:.7rem 0 0}
+.toast{position:fixed;bottom:18px;right:18px;max-width:min(420px,calc(100vw - 36px));background:#303641;border:1px solid #626b7c;box-shadow:0 5px 18px #0005;padding:11px 14px;border-radius:9px;z-index:2}
+.toast:empty{display:none}
+@media(max-width:740px){.layout{grid-template-columns:1fr}.sidebar{grid-row:1;grid-template-columns:1fr 1fr}}
+@media(max-width:490px){.wrap{width:calc(100% - 26px)}.top{min-height:59px}.top .sync{display:none}.hero{align-items:flex-start;flex-direction:column}.sidebar{grid-template-columns:1fr}.profile-line{align-items:flex-start;flex-direction:column;gap:7px}.game{grid-template-columns:72px minmax(0,1fr);gap:9px;padding-inline:10px}.cover{width:72px}.split{grid-template-columns:1fr;gap:0}}
+</style>
+</head>
+<body>
+<header><div class="wrap top">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">▶</span> Próxima partida</div>
+  <div class="tools"><span id="sync" class="sync" role="status">Modo local</span><button id="settings-open" class="ghost" type="button">Configurar</button></div>
+</div></header>
+<main class="wrap">
+  <section class="hero">
+    <div><h1>¿Qué jugamos?</h1><p>Un backlog de Steam para dos.</p></div>
+    <button id="add-open" class="primary" type="button">＋ Agregar juego</button>
+  </section>
+  <div id="profile-line" class="profile-line"></div>
+  <div class="layout">
+    <section class="panel" aria-labelledby="backlog-title">
+      <div class="panel-title"><h2 id="backlog-title">Biblioteca</h2></div>
+      <div class="tabbar" role="group" aria-label="Filtrar juegos">
+        <button type="button" data-tab="queued" aria-pressed="true">Backlog <span id="queued-count" class="count"></span></button>
+        <button type="button" data-tab="done" aria-pressed="false">Terminados <span id="done-count" class="count"></span></button>
+        <button type="button" data-tab="all" aria-pressed="false">Todos <span id="all-count" class="count"></span></button>
+      </div>
+      <div id="games"></div>
+    </section>
+    <aside class="sidebar">
+      <section class="panel" aria-labelledby="playing-title">
+        <div class="panel-title"><h2 id="playing-title">En juego</h2></div>
+        <div class="aside-body" id="playing"></div>
+      </section>
+      <section class="panel" aria-labelledby="votes-title">
+        <div class="panel-title"><h2 id="votes-title">Votación</h2></div>
+        <div class="aside-body" id="votes"></div>
+      </section>
+    </aside>
+  </div>
+</main>
+<dialog id="add-dialog" aria-labelledby="add-title">
+  <div class="dialog-head"><h2 id="add-title">Agregar juego</h2><button class="ghost" type="button" data-close="add-dialog" aria-label="Cerrar">✕</button></div>
+  <form id="add-form">
+    <label>Nombre<input name="title" maxlength="120" placeholder="Ej. It Takes Two" autofocus></label>
+    <label>Enlace de la tienda de Steam <small>Opcional. Si tiene el nombre en la URL, lo completamos al pegarlo.</small><input name="steam" type="url" maxlength="500" placeholder="https://store.steampowered.com/app/…"></label>
+    <div class="actions">
+      <button class="primary" type="submit">Guardar juego</button>
+      <a id="steam-search" class="button ghost" href="https://store.steampowered.com/search/" target="_blank" rel="noopener noreferrer">Buscar en Steam ↗</a>
+    </div>
+    <p id="add-error" class="dialog-error" role="alert" hidden></p>
+  </form>
+</dialog>
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <div class="dialog-head"><h2 id="settings-title">Configurar tablero</h2><button class="ghost" type="button" data-close="settings-dialog" aria-label="Cerrar">✕</button></div>
+  <div id="connected-settings" hidden>
+    <p id="connection-info" class="hint"></p>
+    <button id="disconnect" class="ghost danger" type="button">Desconectar este navegador</button>
+  </div>
+  <div id="local-settings">
+    <p class="hint">En modo local, la lista queda guardada en este navegador. Podés usar los dos perfiles desde acá.</p>
+    <form id="names-form">
+      <div class="split">
+        <label>Jugador 1<input id="name-one" required maxlength="32"></label>
+        <label>Jugador 2<input id="name-two" required maxlength="32"></label>
+      </div>
+      <button type="submit" class="ghost">Guardar nombres locales</button>
+    </form>
+    <details id="shared-setup">
+      <summary>Activar modo compartido</summary>
+      <ol>
+        <li>Publicá este archivo como <code>index.html</code> en GitHub Pages o en un proyecto estático de Vercel.</li>
+        <li>Creá un proyecto en <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer">Supabase</a>. Copiá la URL del proyecto y su clave <code>sb_publishable_…</code> desde <strong>Connect</strong> o <strong>API Keys</strong>.</li>
+        <li>Completá los campos y generá la instalación. Ejecutá el SQL una vez en <strong>SQL Editor → New query</strong>.</li>
+        <li>Guardá los dos enlaces en un lugar privado y compartí uno con tu amigo. Abran cada uno su enlace después de ejecutar el SQL.</li>
+      </ol>
+      <p class="hint">Los enlaces dan acceso a cada perfil. El tablero compartido empieza vacío y el backlog local sigue en este navegador.</p>
+      <form id="setup-form" class="fields">
+        <label>URL pública de este HTML<input id="site-url" type="url" required placeholder="https://usuario.github.io/juegos/"></label>
+        <label>URL del proyecto Supabase<input id="db-url" type="url" required placeholder="https://tu-proyecto.supabase.co"></label>
+        <label>Clave pública de Supabase<input id="db-key" required autocomplete="off" spellcheck="false" placeholder="sb_publishable_…"></label>
+        <button class="primary" type="submit">Generar SQL y enlaces</button>
+      </form>
+      <div id="setup-output" hidden>
+        <p class="hint" style="margin:12px 0">Copiá el SQL al editor de Supabase y ejecutalo antes de abrir los enlaces.</p>
+        <div class="actions" id="setup-actions"></div>
+      </div>
+    </details>
+  </div>
+  <p id="settings-error" class="dialog-error" role="alert" hidden></p>
+</dialog>
+<dialog id="remove-dialog" aria-labelledby="remove-title">
+  <div class="dialog-head"><h2 id="remove-title">Quitar juego</h2><button class="ghost" type="button" data-close="remove-dialog" aria-label="Cerrar">✕</button></div>
+  <p id="remove-text"></p>
+  <div class="actions"><button class="ghost" type="button" data-close="remove-dialog">Cancelar</button><button id="remove-confirm" class="danger" type="button">Quitar juego</button></div>
+</dialog>
+<div id="toast" class="toast" role="status"></div>
+
+<script type="text/plain" id="schema">
+begin;
+create table if not exists public.proxima_partida_board_v1 (
+  singleton boolean primary key default true check (singleton),
+  hash_one bytea not null,
+  hash_two bytea not null,
+  board jsonb not null
+);
+alter table public.proxima_partida_board_v1 enable row level security;
+revoke all on public.proxima_partida_board_v1 from public, anon, authenticated;
+
+insert into public.proxima_partida_board_v1(singleton, hash_one, hash_two, board)
+values (true, decode('__HASH_ONE__','hex'), decode('__HASH_TWO__','hex'),
+  jsonb_build_object('names', __NAMES__::jsonb, 'games', '{}'::jsonb,
+    'votes', '{}'::jsonb, 'playing', null, 'revision', 0));
+
+create or replace function public.proxima_partida_v1(
+  invite_key text, operation text default 'read', payload jsonb default '{}'
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $board$
+declare
+  snapshot jsonb;
+  first_hash bytea;
+  second_hash bytea;
+  supplied_hash bytea;
+  member_slot text;
+  game_id text := payload ->> 'id';
+  game_title text := btrim(payload ->> 'title');
+  steam_id text := payload ->> 'steamId';
+  game jsonb;
+  score text := payload ->> 'score';
+begin
+  if invite_key is null or invite_key !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = '42501', message = 'Invitación inválida.';
+  end if;
+  supplied_hash := sha256(convert_to(invite_key, 'UTF8'));
+  select b.hash_one, b.hash_two, b.board into first_hash, second_hash, snapshot
+    from public.proxima_partida_board_v1 b where b.singleton;
+  member_slot := case supplied_hash when first_hash then '0' when second_hash then '1' end;
+  if member_slot is null then
+    raise exception using errcode = '42501', message = 'Invitación inválida.';
+  end if;
+  if operation = 'read' then
+    return jsonb_build_object('slot', member_slot::integer, 'state', snapshot);
+  end if;
+
+  select b.board into snapshot from public.proxima_partida_board_v1 b where b.singleton for update;
+  if game_id is null or game_id !~ '^(steam-[1-9][0-9]{0,9}|local-[0-9a-f]{32})$' then
+    raise exception using errcode = '22023', message = 'Juego inválido.';
+  end if;
+  game := snapshot #> array['games',game_id];
+  if operation = 'add' then
+    if game is not null then raise exception 'Ese juego ya está en el tablero.'; end if;
+    if coalesce(length(game_title),0) not between 1 and 120
+       or (steam_id is null and game_id !~ '^local-')
+       or (steam_id is not null and (steam_id !~ '^[1-9][0-9]{0,9}$' or game_id <> 'steam-' || steam_id)) then
+      raise exception 'Revisá el nombre y el enlace del juego.';
+    end if;
+    snapshot := jsonb_set(snapshot, array['games',game_id],
+      jsonb_build_object('id',game_id,'title',game_title,'steamId',steam_id,'addedBy',member_slot::integer,
+        'createdAt',clock_timestamp(),'doneAt',null,'scores','{}'::jsonb));
+  else
+    if game is null then raise exception 'El juego ya no está en el tablero.'; end if;
+    case operation
+      when 'vote' then
+        if game ->> 'doneAt' is not null or snapshot ->> 'playing' = game_id then
+          raise exception 'Elegí un juego del backlog.';
+        end if;
+        if payload -> 'active' = 'true'::jsonb then
+          snapshot := jsonb_set(snapshot,array['votes',member_slot],to_jsonb(game_id));
+        elsif snapshot #>> array['votes',member_slot] = game_id then
+          snapshot := snapshot #- array['votes',member_slot];
+        end if;
+      when 'start' then
+        if game ->> 'doneAt' is not null then raise exception 'Ese juego ya está terminado.'; end if;
+        if snapshot ->> 'playing' is not null then raise exception 'Ya hay una partida en curso.'; end if;
+        snapshot := jsonb_set(snapshot,'{playing}',to_jsonb(game_id));
+        snapshot := jsonb_set(snapshot,'{votes}','{}');
+      when 'back' then
+        if snapshot ->> 'playing' = game_id then
+          snapshot := jsonb_set(snapshot,'{playing}','null');
+        elsif game ->> 'doneAt' is not null then
+          snapshot := jsonb_set(snapshot,array['games',game_id,'doneAt'],'null');
+          snapshot := jsonb_set(snapshot,array['games',game_id,'scores'],'{}');
+        end if;
+      when 'done' then
+        if game ->> 'doneAt' is null then
+          snapshot := jsonb_set(snapshot,array['games',game_id,'doneAt'],to_jsonb(clock_timestamp()));
+        end if;
+      when 'rate' then
+        if game ->> 'doneAt' is null then raise exception 'Marcá el juego como terminado para puntuarlo.'; end if;
+        if score is null then
+          snapshot := snapshot #- array['games',game_id,'scores',member_slot];
+        elsif score ~ '^([1-9]|10)$' then
+          snapshot := jsonb_set(snapshot,array['games',game_id,'scores',member_slot],to_jsonb(score::integer));
+        else
+          raise exception 'Elegí un puntaje de 1 a 10.';
+        end if;
+      when 'remove' then
+        snapshot := snapshot #- array['games',game_id];
+      else raise exception using errcode = '22023', message = 'Operación inválida.';
+    end case;
+    if operation in ('done','remove') then
+      if snapshot ->> 'playing' = game_id then snapshot := jsonb_set(snapshot,'{playing}','null'); end if;
+      if snapshot #>> '{votes,0}' = game_id then snapshot := snapshot #- '{votes,0}'; end if;
+      if snapshot #>> '{votes,1}' = game_id then snapshot := snapshot #- '{votes,1}'; end if;
+    end if;
+  end if;
+  snapshot := jsonb_set(snapshot,'{revision}',to_jsonb((snapshot ->> 'revision')::bigint + 1));
+  update public.proxima_partida_board_v1 set board = snapshot where singleton;
+  return jsonb_build_object('slot',member_slot::integer,'state',snapshot);
+end;
+$board$;
+revoke all on function public.proxima_partida_v1(text,text,jsonb) from public, authenticated;
+grant execute on function public.proxima_partida_v1(text,text,jsonb) to anon;
+commit;
+</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const localKey = 'proxima-partida.local.v1';
+const sharedKey = 'proxima-partida.shared.v1';
+const initialState = () => ({ names: ['Jugador 1', 'Jugador 2'], games: {}, votes: {}, playing: null, revision: 0 });
+const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[char]));
+const randomHex = (bytes) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)),
+  (number) => number.toString(16).padStart(2, '0')).join('');
+const searchSteam = (term) => 'https://store.steampowered.com/search/?' + new URLSearchParams({ term });
+const profile = (name, slot) => '<span class="avatar' + (slot === 1 ? ' second' : '') + '" aria-hidden="true">' +
+  escape(Array.from(name)[0].toUpperCase()) + '</span>' + escape(name);
+const dateFormat = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function load(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+
+const local = load(localKey, { state: initialState(), slot: 0 });
+let shared = load(sharedKey, null);
+let state = shared ? initialState() : local.state;
+let slot = shared ? 0 : local.slot;
+let ready = !shared;
+let tab = 'queued';
+let writing = false;
+let polling = false;
+let toastTimer;
+let removeId;
+let installOutput;
+
+function status(message, online = false) {
+  $('sync').textContent = message;
+  $('sync').dataset.online = online;
+}
+
+function notice(message) {
+  $('toast').textContent = message;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').textContent = ''; }, 4200);
+}
+
+function fieldError(id, message = '') {
+  $(id).hidden = !message;
+  $(id).textContent = message;
+}
+
+function storeLocal() {
+  try { localStorage.setItem(localKey, JSON.stringify(local)); }
+  catch { notice('El navegador no pudo guardar el tablero local.'); }
+}
+
+function parseSteam(input) {
+  try {
+    const url = new URL(input.trim());
+    if (url.protocol !== 'https:' || url.host !== 'store.steampowered.com' || url.username || url.password) return null;
+    const match = url.pathname.match(/^\/(?:agecheck\/)?app\/([1-9][0-9]{0,9})(?:\/([^/]*))?\/?$/);
+    if (!match) return null;
+    const steamId = match[1];
+    let title = '';
+    if (match[2]) {
+      try { title = decodeURIComponent(match[2]).replace(/_+/g, ' ').trim(); }
+      catch { /* The App ID remains usable with a malformed slug. */ }
+    }
+    return { steamId, title };
+  } catch { return null; }
+}
+
+function operationButton(action, id, text, css = '', attributes = '') {
+  return '<button type="button" data-action="' + action + '" data-id="' + escape(id) +
+    '" class="' + css + '" ' + attributes + '>' + text + '</button>';
+}
+
+function rating(game) {
+  const otherSlot = 1 - slot;
+  const otherScore = game.scores[otherSlot];
+  const options = Array.from({ length: 10 }, (_, i) => {
+    const value = i + 1;
+    return '<option' + (game.scores[slot] === value ? ' selected' : '') + '>' + value + '</option>';
+  }).join('');
+  return '<div class="rating"><span>' + escape(state.names[slot]) +
+    ' <select aria-label="Puntaje de ' + escape(state.names[slot]) + ' para ' + escape(game.title) +
+    '" data-score="' + escape(game.id) + '"><option value="">Sin puntaje</option>' + options +
+    '</select></span><span>' + escape(state.names[otherSlot]) + ' · ' +
+    (otherScore == null ? 'Sin puntaje' : otherScore + '/10') + '</span></div>';
+}
+
+function gameRow(game) {
+  const playing = state.playing === game.id;
+  const picked = state.votes[slot] === game.id;
+  const count = Object.values(state.votes).filter((id) => id === game.id).length;
+  const storeLink = game.steamId ? 'https://store.steampowered.com/app/' + game.steamId + '/' : searchSteam(game.title);
+  const cover = game.steamId ? '<img alt="" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/' +
+    game.steamId + '/header.jpg">' : '';
+  const date = game.doneAt ? ' · ' + dateFormat.format(new Date(game.doneAt)) : '';
+  const stateLabel = game.doneAt ? '<span class="pill">Terminado' + date + '</span>' : playing ?
+    '<span class="pill">En juego</span>' : '<span>' + count + (count === 1 ? ' voto' : ' votos') + '</span>';
+  let actions = '<a href="' + escape(storeLink) + '" class="button ghost" target="_blank" rel="noopener noreferrer">' +
+    (game.steamId ? 'Steam ↗' : 'Buscar en Steam ↗') + '</a>';
+  if (game.doneAt) {
+    actions += operationButton('back', game.id, 'Volver al backlog', 'ghost');
+  } else {
+    if (!playing) actions += operationButton('vote', game.id, picked ? 'Quitar mi voto' : 'Votar',
+      picked ? 'voted' : '', 'aria-pressed="' + picked + '"');
+    if (!state.playing) actions += operationButton('start', game.id, 'Jugar siguiente', 'ghost');
+    if (playing) actions += operationButton('back', game.id, 'Volver al backlog', 'ghost');
+    actions += operationButton('done', game.id, 'Marcar terminado', 'ghost');
+  }
+  actions += operationButton('ask-remove', game.id, 'Quitar', 'ghost danger');
+  return '<article class="game"><div class="cover" aria-hidden="true">STEAM' + cover +
+    '</div><div><h3>' + escape(game.title) + '</h3><div class="meta">' + stateLabel +
+    '<span>Agregó ' + escape(state.names[game.addedBy]) + '</span></div><div class="actions">' + actions +
+    '</div>' + (game.doneAt ? rating(game) : '') + '</div></article>';
+}
+
+function render() {
+  $('add-open').disabled = !ready;
+  $('profile-line').innerHTML = '<strong>Jugás como</strong><div class="profiles">' +
+    (shared ? (ready ? profile(state.names[slot], slot) : 'Sesión compartida') : state.names.map((name, index) =>
+      '<button type="button" data-profile="' + index + '" aria-pressed="' + (index === slot) +
+      '">' + profile(name, index) + '</button>').join('')) + '</div>';
+
+  const all = Object.values(state.games).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const queued = all.filter((game) => !game.doneAt && game.id !== state.playing);
+  const done = all.filter((game) => game.doneAt).sort((a, b) => Date.parse(b.doneAt) - Date.parse(a.doneAt));
+  const list = { all, queued, done }[tab];
+  $('all-count').textContent = all.length;
+  $('queued-count').textContent = queued.length;
+  $('done-count').textContent = done.length;
+  for (const button of document.querySelectorAll('[data-tab]')) {
+    button.setAttribute('aria-pressed', button.dataset.tab === tab);
+  }
+  const empty = !ready ? ['Conectando con el tablero', 'Podés revisar el acceso desde Configurar.'] : {
+    queued: ['El backlog está vacío', 'Agregá un juego de Steam para empezar a votar.'],
+    done: ['Todavía no terminaron juegos', 'Acá aparecen los juegos terminados y sus puntajes.'],
+    all: ['Todavía no hay juegos', 'Agregá el primer juego de la lista.']
+  }[tab];
+  $('games').innerHTML = list.length ? list.map(gameRow).join('') : '<div class="empty"><div class="empty-mark" aria-hidden="true">◇</div><h3>' +
+    empty[0] + '</h3><p>' + empty[1] + '</p></div>';
+
+  const playing = state.games[state.playing];
+  $('playing').innerHTML = playing ? '<h3 class="playing">' + escape(playing.title) +
+    '</h3><div class="actions">' + operationButton('done', playing.id, 'Marcar terminado') +
+    operationButton('back', playing.id, 'Volver al backlog', 'ghost') + '</div>' : '<p>No hay una partida en curso.</p>';
+  const [first, second] = state.names.map((_, index) => state.games[state.votes[index]]);
+  let result = 'Cada jugador puede votar por un juego.';
+  if (first && second) {
+    result = first.id === second.id ? 'Coincidieron en ' + first.title + '.' : 'Empate. Pueden cambiar el voto o elegir un juego.';
+  } else if (first || second) {
+    result = (first || second).title + ' va primero con un voto.';
+  }
+  $('votes').innerHTML = state.names.map((name, index) =>
+    '<div class="ballot">' + profile(name, index) + '<span>' +
+    escape(state.games[state.votes[index]]?.title || 'Sin voto') + '</span></div>').join('') +
+    '<p class="ballot-result">' + escape(result) + '</p>';
+}
+
+$('games').addEventListener('error', (event) => {
+  if (event.target instanceof HTMLImageElement) event.target.remove();
+}, true);
+
+function localOperation(action, payload) {
+  const { id, title, steamId, score, active } = payload;
+  const game = state.games[id];
+  const now = new Date().toISOString();
+  if (action === 'add') {
+    if (game) throw new Error('Ese juego ya está en el tablero.');
+    state.games[id] = { id, title, steamId, createdAt: now, addedBy: slot, doneAt: null, scores: {} };
+    storeLocal();
+    return;
+  }
+  if (!game) throw new Error('El juego ya no está en el tablero.');
+  switch (action) {
+    case 'vote':
+      if (game.doneAt || state.playing === id) throw new Error('Elegí un juego del backlog.');
+      if (active) state.votes[slot] = id;
+      else if (state.votes[slot] === id) delete state.votes[slot];
+      break;
+    case 'start':
+      if (game.doneAt) throw new Error('Ese juego ya está terminado.');
+      if (state.playing) throw new Error('Ya hay una partida en curso.');
+      state.playing = id;
+      state.votes = {};
+      break;
+    case 'back':
+      if (state.playing === id) state.playing = null;
+      else if (game.doneAt) {
+        game.doneAt = null;
+        game.scores = {};
+      }
+      break;
+    case 'done':
+      game.doneAt ??= now;
+      break;
+    case 'rate':
+      if (!game.doneAt) throw new Error('Marcá el juego como terminado para puntuarlo.');
+      if (score == null) delete game.scores[slot];
+      else game.scores[slot] = score;
+      break;
+    case 'remove':
+      delete state.games[id];
+      break;
+  }
+  if (action === 'done' || action === 'remove') {
+    if (state.playing === id) state.playing = null;
+    for (const member of [0, 1]) {
+      if (state.votes[member] === id) delete state.votes[member];
+    }
+  }
+  storeLocal();
+}
+
+function connectionFrom(url, publicKey, invite) {
+  const db = new URL(url);
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(db.origin) || db.username || db.password ||
+      db.pathname !== '/' || db.search || db.hash) throw new Error('Revisá la URL del proyecto Supabase.');
+  if (!/^sb_publishable_[a-zA-Z0-9_-]+$/.test(publicKey)) throw new Error('Usá la clave pública sb_publishable_… del proyecto.');
+  if (invite !== undefined && !/^[0-9a-f]{64}$/.test(invite)) throw new Error('El enlace de invitación está incompleto.');
+  return { url: db.origin, publicKey, invite };
+}
+
+async function rpc(connection, operation = 'read', payload = {}) {
+  let response;
+  try {
+    response = await fetch(connection.url + '/rest/v1/rpc/proxima_partida_v1', {
+      method: 'POST',
+      headers: { apikey: connection.publicKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite_key: connection.invite, operation, payload }),
+      signal: AbortSignal.timeout(12000)
+    });
+  } catch {
+    throw new Error('No se pudo conectar con el tablero compartido.');
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (data?.code === 'PGRST202') throw new Error('El tablero todavía no está instalado en Supabase.');
+    throw new Error(data?.message || 'No se pudo acceder al tablero compartido.');
+  }
+  if (!data?.state?.names || ![0, 1].includes(data.slot)) throw new Error('Respuesta inesperada del tablero compartido.');
+  return data;
+}
+
+function accept(data) {
+  const changed = !ready || data.slot !== slot || data.state.revision > state.revision;
+  if (changed) {
+    state = data.state;
+    slot = data.slot;
+    ready = true;
+    render();
+  }
+  status('Compartido · conectado', true);
+}
+
+async function refresh() {
+  const connection = shared;
+  if (!connection || polling || writing) return;
+  polling = true;
+  try {
+    const data = await rpc(connection);
+    if (shared === connection) accept(data);
+  } catch (error) {
+    if (shared === connection) {
+      status('Compartido · sin conexión');
+      $('connection-info').textContent = error.message;
+    }
+  } finally { polling = false; }
+}
+
+async function mutate(action, payload) {
+  if (!ready || writing) throw new Error('Esperá a que el tablero esté disponible.');
+  if (shared) {
+    const connection = shared;
+    writing = true;
+    try {
+      const data = await rpc(connection, action, payload);
+      if (shared === connection) accept(data);
+    } finally { writing = false; }
+  } else {
+    localOperation(action, payload);
+    render();
+  }
+}
+
+function openSettings() {
+  $('local-settings').hidden = Boolean(shared);
+  $('connected-settings').hidden = !shared;
+  if (!shared) {
+    $('name-one').value = local.state.names[0];
+    $('name-two').value = local.state.names[1];
+    if (location.protocol === 'https:' && !$('site-url').value) $('site-url').value = location.origin + location.pathname;
+  } else if (ready) {
+    $('connection-info').textContent = 'Sesión compartida de ' + state.names[slot] + '.';
+  }
+  fieldError('settings-error');
+  $('settings-dialog').showModal();
+}
+
+$('settings-open').addEventListener('click', openSettings);
+$('add-open').addEventListener('click', () => {
+  $('add-form').reset();
+  $('steam-search').href = searchSteam('');
+  fieldError('add-error');
+  $('add-dialog').showModal();
+});
+
+const form = $('add-form');
+form.elements.title.addEventListener('input', () => { $('steam-search').href = searchSteam(form.elements.title.value.trim()); });
+form.elements.steam.addEventListener('input', () => {
+  const parsed = parseSteam(form.elements.steam.value);
+  if (parsed?.title && !form.elements.title.value.trim()) {
+    form.elements.title.value = Array.from(parsed.title).slice(0, 120).join('');
+    $('steam-search').href = searchSteam(form.elements.title.value);
+  }
+});
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = form.querySelector('button[type="submit"]');
+  const url = form.elements.steam.value.trim();
+  const parsed = url ? parseSteam(url) : null;
+  const title = form.elements.title.value.trim();
+  fieldError('add-error');
+  if (url && !parsed) return fieldError('add-error', 'Pegá la URL de la página de un juego en la tienda de Steam.');
+  if (!title) return fieldError('add-error', 'Escribí el nombre del juego.');
+  button.disabled = true;
+  try {
+    const steamId = parsed?.steamId ?? null;
+    await mutate('add', { id: steamId ? 'steam-' + steamId : 'local-' + randomHex(16), title, steamId });
+    tab = 'queued';
+    render();
+    $('add-dialog').close();
+    notice('Juego agregado.');
+  } catch (error) { fieldError('add-error', error.message); }
+  finally { button.disabled = false; }
+});
+
+$('names-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const names = [$('name-one').value.trim(), $('name-two').value.trim()];
+  if (names.some((name) => !name)) return fieldError('settings-error', 'Completá los dos nombres.');
+  local.state.names = names;
+  storeLocal();
+  render();
+  $('settings-dialog').close();
+  notice('Nombres guardados.');
+});
+
+function inviteUrl(site, connection, invite) {
+  const url = new URL(site);
+  url.hash = new URLSearchParams({ db: connection.url, api: connection.publicKey, invite }).toString();
+  return url.href;
+}
+
+$('setup-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector('button[type="submit"]');
+  button.disabled = true;
+  fieldError('settings-error');
+  $('setup-output').hidden = true;
+  installOutput = null;
+  try {
+    if (!crypto.subtle) throw new Error('Abrí el HTML en un navegador moderno o desde el sitio publicado por HTTPS.');
+    const names = [$('name-one').value.trim(), $('name-two').value.trim()];
+    if (names.some((name) => !name)) throw new Error('Completá los dos nombres.');
+    const site = new URL($('site-url').value.trim());
+    if (site.protocol !== 'https:' || site.username || site.password || site.hash || site.search) {
+      throw new Error('Ingresá la URL HTTPS del HTML publicado, sin parámetros.');
+    }
+    const connection = connectionFrom($('db-url').value.trim(), $('db-key').value.trim());
+    const invites = [randomHex(32), randomHex(32)];
+    const hashes = await Promise.all(invites.map(async (invite) => {
+      const data = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(invite));
+      return Array.from(new Uint8Array(data), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }));
+    const namesHex = Array.from(new TextEncoder().encode(JSON.stringify(names)),
+      (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const sqlNames = "convert_from(decode('" + namesHex + "','hex'),'UTF8')";
+    const sql = $('schema').textContent.trim().replace('__HASH_ONE__', hashes[0])
+      .replace('__HASH_TWO__', hashes[1]).replace('__NAMES__', () => sqlNames);
+    installOutput = { sql, first: inviteUrl(site, connection, invites[0]), second: inviteUrl(site, connection, invites[1]) };
+    $('setup-actions').innerHTML = '<button type="button" data-copy="sql">Copiar SQL</button>' +
+      '<button type="button" data-copy="first">Copiar enlace de ' + escape(names[0]) + '</button>' +
+      '<button type="button" data-copy="second">Copiar enlace de ' + escape(names[1]) + '</button>';
+    $('setup-output').hidden = false;
+  } catch (error) { fieldError('settings-error', error.message); }
+  finally { button.disabled = false; }
+});
+
+$('disconnect').addEventListener('click', () => {
+  if (writing) return;
+  try { localStorage.removeItem(sharedKey); }
+  catch { notice('El navegador no pudo borrar la sesión guardada.'); }
+  shared = null;
+  state = local.state;
+  slot = local.slot;
+  ready = true;
+  status('Modo local');
+  render();
+  $('settings-dialog').close();
+});
+
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  const { close, profile: selected, tab: nextTab, action, id, copy } = button.dataset;
+  if (close) $(close).close();
+  if (selected !== undefined && !shared) {
+    slot = local.slot = Number(selected);
+    storeLocal();
+    render();
+    document.querySelector('[data-profile="' + slot + '"]')?.focus();
+  }
+  if (nextTab) {
+    tab = nextTab;
+    render();
+  }
+  if (copy && installOutput) {
+    try {
+      await navigator.clipboard.writeText(installOutput[copy]);
+      fieldError('settings-error');
+      notice(copy === 'sql' ? 'SQL copiado.' : 'Enlace privado copiado.');
+    } catch {
+      fieldError('settings-error', 'El navegador bloqueó el portapapeles. Probá desde la página publicada por HTTPS.');
+    }
+  }
+  if (action === 'ask-remove') {
+    removeId = id;
+    $('remove-text').textContent = '¿Querés quitar «' + state.games[id].title + '» del tablero? Se borrarán sus votos y puntajes.';
+    $('remove-dialog').showModal();
+  } else if (action) {
+    try {
+      await mutate(action, { id, active: state.votes[slot] !== id });
+      if (action === 'done') notice('Marcado como terminado. Podés puntuarlo en Terminados.');
+      if (action === 'start') notice('Juego elegido para la próxima partida.');
+    } catch (error) { notice(error.message); }
+  }
+});
+
+$('remove-confirm').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await mutate('remove', { id: removeId });
+    $('remove-dialog').close();
+    notice('Juego quitado.');
+  } catch (error) {
+    $('remove-dialog').close();
+    notice(error.message);
+  } finally { button.disabled = false; }
+});
+
+$('games').addEventListener('change', async (event) => {
+  const id = event.target.dataset.score;
+  if (!id) return;
+  const score = event.target.value ? Number(event.target.value) : null;
+  try {
+    await mutate('rate', { id, score });
+    notice('Puntaje guardado.');
+    document.querySelector('[data-score="' + id + '"]')?.focus();
+  } catch (error) {
+    render();
+    notice(error.message);
+  }
+});
+
+async function start() {
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  if (fragment.has('invite')) {
+    status('Validando invitación…');
+    $('add-open').disabled = true;
+    try {
+      const connection = connectionFrom(fragment.get('db'), fragment.get('api') || '', fragment.get('invite'));
+      const data = await rpc(connection);
+      try {
+        localStorage.setItem(sharedKey, JSON.stringify(connection));
+        history.replaceState(null, '', location.pathname + location.search);
+      } catch { notice('Guardá el enlace privado para volver a entrar.'); }
+      shared = connection;
+      ready = false;
+      accept(data);
+    } catch (error) { notice(error.message); }
+  }
+  if (shared && !ready) {
+    status('Conectando con Supabase…');
+    await refresh();
+  }
+  if (!shared) status('Modo local');
+  render();
+}
+start();
+setInterval(() => { if (!document.hidden) refresh(); }, 8000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>
