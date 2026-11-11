@@ -214,10 +214,11 @@ details .fields{margin-top:14px}
     <button id="copy-profile-upgrade" type="button">Copiar SQL de actualización</button>
   </div>
 </dialog>
-<dialog id="remove-dialog" aria-labelledby="remove-title">
-  <div class="dialog-head"><h2 id="remove-title">Quitar juego</h2><button class="ghost" type="button" data-close="remove-dialog" aria-label="Cerrar">✕</button></div>
-  <p id="remove-text"></p>
-  <div class="actions"><button class="ghost" type="button" data-close="remove-dialog">Cancelar</button><button id="remove-confirm" class="danger" type="button">Quitar juego</button></div>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+  <div class="dialog-head"><h2 id="confirm-title"></h2><button class="ghost" type="button" data-close="confirm-dialog" aria-label="Cerrar">✕</button></div>
+  <p id="confirm-text"></p>
+  <div class="actions"><button class="ghost" type="button" data-close="confirm-dialog">Cancelar</button><button id="confirm-action" type="button"></button></div>
+  <p id="confirm-error" class="dialog-error" role="alert" hidden></p>
 </dialog>
 <div id="toast" class="toast" role="status"></div>
 
@@ -407,7 +408,7 @@ let tab = 'queued';
 let writing = false;
 let polling = false;
 let toastTimer;
-let removeId;
+let pendingAction;
 let installOutput;
 let rouletteGames = [];
 let rouletteChoice = null;
@@ -763,6 +764,27 @@ async function mutate(action, payload) {
   }
 }
 
+function requestConfirmation(action, id, fromRoulette = false) {
+  const game = state.games[id];
+  if (!ready || !game) return notice('El juego ya no está disponible.');
+  const wasPlaying = state.playing === id;
+  const wasDone = Boolean(game.doneAt);
+  if (action === 'back' && !wasPlaying && !wasDone) return notice('El juego ya está en el backlog.');
+  const name = '«' + game.title + '»';
+  const copy = action === 'start' ? ['Jugar siguiente', '¿Querés empezar a jugar ' + name + '? Se borrarán los votos actuales.', 'Jugar siguiente'] :
+    action === 'back' ? ['Volver al backlog', wasPlaying ? '¿Querés devolver ' + name + ' al backlog?' :
+      '¿Querés devolver ' + name + ' al backlog? Se borrarán sus puntajes.', 'Volver al backlog'] :
+      ['Quitar juego', '¿Querés quitar ' + name + ' del tablero? Se borrarán sus votos y puntajes.', 'Quitar juego'];
+  pendingAction = { action, id, fromRoulette, wasPlaying, wasDone };
+  $('confirm-title').textContent = copy[0];
+  $('confirm-text').textContent = copy[1];
+  $('confirm-action').textContent = copy[2];
+  $('confirm-action').className = action === 'remove' ? 'danger' : 'primary';
+  $('confirm-action').disabled = false;
+  fieldError('confirm-error');
+  $('confirm-dialog').showModal();
+}
+
 function openSettings() {
   $('local-settings').hidden = Boolean(shared);
   $('connected-settings').hidden = !shared;
@@ -812,15 +834,7 @@ $('roulette-spin').addEventListener('click', () => {
 $('roulette-start').addEventListener('click', async (event) => {
   const game = rouletteChoice;
   if (!game || event.currentTarget.disabled) return;
-  event.currentTarget.disabled = true;
-  try {
-    await mutate('start', { id: game.id });
-    $('roulette-dialog').close();
-    notice('Juego elegido para la próxima partida.');
-  } catch (error) {
-    updateRouletteStart();
-    notice(error.message);
-  }
+  requestConfirmation('start', game.id, true);
 });
 $('add-open').addEventListener('click', () => {
   $('add-form').reset();
@@ -983,29 +997,35 @@ document.addEventListener('click', async (event) => {
       fieldError('settings-error', 'El navegador bloqueó el portapapeles. Probá desde la página publicada por HTTPS.');
     }
   }
-  if (action === 'ask-remove') {
-    removeId = id;
-    $('remove-text').textContent = '¿Querés quitar «' + state.games[id].title + '» del tablero? Se borrarán sus votos y puntajes.';
-    $('remove-dialog').showModal();
+  if (['start', 'back', 'ask-remove'].includes(action)) {
+    requestConfirmation(action === 'ask-remove' ? 'remove' : action, id);
   } else if (action) {
     try {
       await mutate(action, { id, active: state.votes[slot] !== id });
       if (action === 'done') notice('Marcado como terminado. Podés puntuarlo en Terminados.');
-      if (action === 'start') notice('Juego elegido para la próxima partida.');
     } catch (error) { notice(error.message); }
   }
 });
 
-$('remove-confirm').addEventListener('click', async (event) => {
+$('confirm-dialog').addEventListener('close', () => { pendingAction = null; });
+$('confirm-action').addEventListener('click', async (event) => {
+  const pending = pendingAction;
+  if (!pending) return;
   const button = event.currentTarget;
   button.disabled = true;
+  fieldError('confirm-error');
   try {
-    await mutate('remove', { id: removeId });
-    $('remove-dialog').close();
-    notice('Juego quitado.');
+    if (pending.action === 'back' && (pending.wasPlaying !== (state.playing === pending.id) ||
+      pending.wasDone !== Boolean(state.games[pending.id]?.doneAt))) {
+      throw new Error('El juego cambió de estado. Cerrá esta ventana y volvé a intentarlo.');
+    }
+    await mutate(pending.action, { id: pending.id });
+    $('confirm-dialog').close();
+    if (pending.fromRoulette) $('roulette-dialog').close();
+    notice({ start: 'Juego elegido para la próxima partida.', back: 'Juego devuelto al backlog.',
+      remove: 'Juego quitado.' }[pending.action]);
   } catch (error) {
-    $('remove-dialog').close();
-    notice(error.message);
+    fieldError('confirm-error', error.message);
   } finally { button.disabled = false; }
 });
 
