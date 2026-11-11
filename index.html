@@ -43,6 +43,9 @@ main{padding-block:32px 56px}
 .profile-line strong{font-size:.86rem;color:var(--muted)}
 .profiles button[aria-pressed="true"],.voted{background:#333d22;color:var(--accent);border-color:#62723c}
 .profiles button{font-size:.82rem}
+.profile-control{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.profile-control>button{font-size:.8rem}
+.profile-current{display:inline-flex;align-items:center;gap:7px;font-size:.88rem;font-weight:700}
 .avatar{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#3f4929;color:#e7fbab;font-size:.75rem;font-weight:800;flex:none}
 .avatar.second{background:#433a60;color:#eadcff}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:20px;align-items:start}
@@ -63,6 +66,12 @@ main{padding-block:32px 56px}
 .ballot{display:flex;align-items:center;gap:9px;font-size:.84rem;padding-block:8px}
 .ballot span:last-child{margin-left:auto;text-align:right;color:var(--muted);overflow-wrap:anywhere}
 .ballot-result{border-top:1px solid var(--line);margin-top:8px!important;padding-top:12px}
+.vote-list{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.vote-label{color:var(--muted);font-size:.76rem;margin-right:2px}
+.vote-person{display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border:1px solid #66753e;border-radius:20px;background:#313b22;color:#e7fbab;font-size:.77rem;font-weight:700;max-width:100%;overflow-wrap:anywhere}
+.vote-person.second{border-color:#7b689e;background:#39304f;color:#eadcff}
+.vote-person .avatar{width:21px;height:21px;font-size:.65rem;background:#505e31}
+.vote-person.second .avatar{background:#554574}
 .game{display:grid;grid-template-columns:106px minmax(0,1fr);gap:14px;padding:15px 16px}
 .game+.game{border-top:1px solid var(--line)}
 .cover{width:106px;aspect-ratio:460/215;position:relative;overflow:hidden;display:grid;place-items:center;border:1px solid #484d59;border-radius:7px;background:repeating-linear-gradient(135deg,#2d323c 0 10px,#2a2e36 10px 20px);color:var(--muted);font-size:.72rem}
@@ -175,6 +184,18 @@ details .fields{margin-top:14px}
     </details>
   </div>
   <p id="settings-error" class="dialog-error" role="alert" hidden></p>
+</dialog>
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <div class="dialog-head"><h2 id="profile-title">Cambiar mi nombre</h2><button class="ghost" type="button" data-close="profile-dialog" aria-label="Cerrar">✕</button></div>
+  <form id="profile-form">
+    <label>Nombre del perfil<input id="profile-name" required maxlength="32" autocomplete="nickname" autofocus></label>
+    <button class="primary" type="submit">Guardar nombre</button>
+  </form>
+  <p id="profile-error" class="dialog-error" role="alert" hidden></p>
+  <div id="profile-upgrade" hidden>
+    <p class="hint" style="margin-top:12px">Si ya activaron el tablero compartido con la versión anterior, ejecutá este SQL una vez en el SQL Editor del mismo proyecto Supabase. Después podés guardar tu nombre desde acá.</p>
+    <button id="copy-profile-upgrade" type="button">Copiar SQL de actualización</button>
+  </div>
 </dialog>
 <dialog id="remove-dialog" aria-labelledby="remove-title">
   <div class="dialog-head"><h2 id="remove-title">Quitar juego</h2><button class="ghost" type="button" data-close="remove-dialog" aria-label="Cerrar">✕</button></div>
@@ -301,6 +322,42 @@ revoke all on function public.proxima_partida_v1(text,text,jsonb) from public, a
 grant execute on function public.proxima_partida_v1(text,text,jsonb) to anon;
 commit;
 </script>
+<script type="text/plain" id="profile-schema">
+begin;
+create or replace function public.proxima_partida_rename_v1(invite_key text, player_name text)
+returns jsonb language plpgsql security definer set search_path = ''
+as $profile$
+declare
+  snapshot jsonb;
+  supplied_hash bytea;
+  member_slot text;
+  clean_name text := btrim(player_name);
+begin
+  if invite_key is null or invite_key !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = '42501', message = 'Invitación inválida.';
+  end if;
+  supplied_hash := sha256(convert_to(invite_key, 'UTF8'));
+  select b.board, case supplied_hash when b.hash_one then '0' else '1' end
+    into snapshot, member_slot
+    from public.proxima_partida_board_v1 b
+    where b.singleton and supplied_hash in (b.hash_one, b.hash_two)
+    for update;
+  if not found then
+    raise exception using errcode = '42501', message = 'Invitación inválida.';
+  end if;
+  if coalesce(length(clean_name),0) not between 1 and 32 then
+    raise exception using errcode = '22023', message = 'Ingresá un nombre de 1 a 32 caracteres.';
+  end if;
+  snapshot := jsonb_set(snapshot, array['names',member_slot], to_jsonb(clean_name));
+  snapshot := jsonb_set(snapshot,'{revision}',to_jsonb((snapshot ->> 'revision')::bigint + 1));
+  update public.proxima_partida_board_v1 set board = snapshot where singleton;
+  return jsonb_build_object('slot',member_slot::integer,'state',snapshot);
+end;
+$profile$;
+revoke all on function public.proxima_partida_rename_v1(text,text) from public, authenticated;
+grant execute on function public.proxima_partida_rename_v1(text,text) to anon;
+commit;
+</script>
 <script>
 const $ = (id) => document.getElementById(id);
 const localKey = 'proxima-partida.local.v1';
@@ -312,8 +369,11 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 const randomHex = (bytes) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)),
   (number) => number.toString(16).padStart(2, '0')).join('');
 const searchSteam = (term) => 'https://store.steampowered.com/search/?' + new URLSearchParams({ term });
-const profile = (name, slot) => '<span class="avatar' + (slot === 1 ? ' second' : '') + '" aria-hidden="true">' +
-  escape(Array.from(name)[0].toUpperCase()) + '</span>' + escape(name);
+const profile = (name, slot) => {
+  const initials = name.split(/\s+/).slice(0, 2).map((word) => Array.from(word)[0]).join('').toUpperCase();
+  return '<span class="avatar' + (slot === 1 ? ' second' : '') + '" aria-hidden="true">' +
+    escape(initials) + '</span>' + escape(name);
+};
 const dateFormat = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
 
 function load(key, fallback) {
@@ -389,16 +449,21 @@ function rating(game) {
     (otherScore == null ? 'Sin puntaje' : otherScore + '/10') + '</span></div>';
 }
 
+function voteBadges(gameId) {
+  const voters = state.names.map((name, member) => state.votes[member] === gameId ?
+    '<span class="vote-person' + (member === 1 ? ' second' : '') + '">' + profile(name, member) + '</span>' : '').join('');
+  return voters ? '<div class="vote-list"><span class="vote-label">Votaron</span>' + voters + '</div>' : '';
+}
+
 function gameRow(game) {
   const playing = state.playing === game.id;
   const picked = state.votes[slot] === game.id;
-  const count = Object.values(state.votes).filter((id) => id === game.id).length;
   const storeLink = game.steamId ? 'https://store.steampowered.com/app/' + game.steamId + '/' : searchSteam(game.title);
   const cover = game.steamId ? '<img alt="" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/' +
     game.steamId + '/header.jpg">' : '';
   const date = game.doneAt ? ' · ' + dateFormat.format(new Date(game.doneAt)) : '';
   const stateLabel = game.doneAt ? '<span class="pill">Terminado' + date + '</span>' : playing ?
-    '<span class="pill">En juego</span>' : '<span>' + count + (count === 1 ? ' voto' : ' votos') + '</span>';
+    '<span class="pill">En juego</span>' : '';
   let actions = '<a href="' + escape(storeLink) + '" class="button ghost" target="_blank" rel="noopener noreferrer">' +
     (game.steamId ? 'Steam ↗' : 'Buscar en Steam ↗') + '</a>';
   if (game.doneAt) {
@@ -413,16 +478,18 @@ function gameRow(game) {
   actions += operationButton('ask-remove', game.id, 'Quitar', 'ghost danger');
   return '<article class="game"><div class="cover" aria-hidden="true">STEAM' + cover +
     '</div><div><h3>' + escape(game.title) + '</h3><div class="meta">' + stateLabel +
-    '<span>Agregó ' + escape(state.names[game.addedBy]) + '</span></div><div class="actions">' + actions +
+    '<span>Agregó ' + escape(state.names[game.addedBy]) + '</span></div>' + voteBadges(game.id) +
+    '<div class="actions">' + actions +
     '</div>' + (game.doneAt ? rating(game) : '') + '</div></article>';
 }
 
 function render() {
   $('add-open').disabled = !ready;
-  $('profile-line').innerHTML = '<strong>Jugás como</strong><div class="profiles">' +
-    (shared ? (ready ? profile(state.names[slot], slot) : 'Sesión compartida') : state.names.map((name, index) =>
+  $('profile-line').innerHTML = '<strong>Jugás como</strong><div class="profile-control"><div class="profiles">' +
+    (shared ? (ready ? '<span class="profile-current">' + profile(state.names[slot], slot) + '</span>' : 'Sesión compartida') : state.names.map((name, index) =>
       '<button type="button" data-profile="' + index + '" aria-pressed="' + (index === slot) +
-      '">' + profile(name, index) + '</button>').join('')) + '</div>';
+      '">' + profile(name, index) + '</button>').join('')) + '</div>' +
+    (ready ? '<button id="profile-open" type="button" class="ghost">Cambiar mi nombre</button>' : '') + '</div>';
 
   const all = Object.values(state.games).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const queued = all.filter((game) => !game.doneAt && game.id !== state.playing);
@@ -465,6 +532,11 @@ $('games').addEventListener('error', (event) => {
 
 function localOperation(action, payload) {
   const { id, title, steamId, score, active } = payload;
+  if (action === 'rename') {
+    state.names[slot] = payload.name;
+    storeLocal();
+    return;
+  }
   const game = state.games[id];
   const now = new Date().toISOString();
   if (action === 'add') {
@@ -524,12 +596,16 @@ function connectionFrom(url, publicKey, invite) {
 }
 
 async function rpc(connection, operation = 'read', payload = {}) {
+  const renaming = operation === 'rename';
+  const endpoint = renaming ? 'proxima_partida_rename_v1' : 'proxima_partida_v1';
+  const params = renaming ? { invite_key: connection.invite, player_name: payload.name } :
+    { invite_key: connection.invite, operation, payload };
   let response;
   try {
-    response = await fetch(connection.url + '/rest/v1/rpc/proxima_partida_v1', {
+    response = await fetch(connection.url + '/rest/v1/rpc/' + endpoint, {
       method: 'POST',
       headers: { apikey: connection.publicKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invite_key: connection.invite, operation, payload }),
+      body: JSON.stringify(params),
       signal: AbortSignal.timeout(12000)
     });
   } catch {
@@ -537,7 +613,14 @@ async function rpc(connection, operation = 'read', payload = {}) {
   }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    if (data?.code === 'PGRST202') throw new Error('El tablero todavía no está instalado en Supabase.');
+    if (data?.code === 'PGRST202') {
+      if (renaming) {
+        const error = new Error('El tablero compartido necesita una actualización para cambiar el nombre.');
+        error.code = 'PROFILE_UPGRADE';
+        throw error;
+      }
+      throw new Error('El tablero todavía no está instalado en Supabase.');
+    }
     throw new Error(data?.message || 'No se pudo acceder al tablero compartido.');
   }
   if (!data?.state?.names || ![0, 1].includes(data.slot)) throw new Error('Respuesta inesperada del tablero compartido.');
@@ -648,6 +731,33 @@ $('names-form').addEventListener('submit', (event) => {
   notice('Nombres guardados.');
 });
 
+$('profile-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = $('profile-name').value.trim();
+  const button = event.target.querySelector('button[type="submit"]');
+  fieldError('profile-error');
+  if (!name) return fieldError('profile-error', 'Ingresá un nombre.');
+  button.disabled = true;
+  try {
+    await mutate('rename', { name });
+    $('profile-dialog').close();
+    $('profile-open')?.focus();
+    notice('Nombre guardado.');
+  } catch (error) {
+    fieldError('profile-error', error.message);
+    $('profile-upgrade').hidden = error.code !== 'PROFILE_UPGRADE';
+  } finally { button.disabled = false; }
+});
+
+$('copy-profile-upgrade').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('profile-schema').textContent.trim());
+    $('profile-error').textContent = 'SQL copiado.';
+  } catch {
+    fieldError('profile-error', 'El navegador bloqueó el portapapeles. Probá desde la página publicada por HTTPS.');
+  }
+});
+
 function inviteUrl(site, connection, invite) {
   const url = new URL(site);
   url.hash = new URLSearchParams({ db: connection.url, api: connection.publicKey, invite }).toString();
@@ -678,7 +788,9 @@ $('setup-form').addEventListener('submit', async (event) => {
     const namesHex = Array.from(new TextEncoder().encode(JSON.stringify(names)),
       (byte) => byte.toString(16).padStart(2, '0')).join('');
     const sqlNames = "convert_from(decode('" + namesHex + "','hex'),'UTF8')";
-    const sql = $('schema').textContent.trim().replace('__HASH_ONE__', hashes[0])
+    const profileSchema = $('profile-schema').textContent.trim().replace(/^begin;\s*/, '');
+    const sql = $('schema').textContent.trim().replace(/commit;$/, () => profileSchema)
+      .replace('__HASH_ONE__', hashes[0])
       .replace('__HASH_TWO__', hashes[1]).replace('__NAMES__', () => sqlNames);
     installOutput = { sql, first: inviteUrl(site, connection, invites[0]), second: inviteUrl(site, connection, invites[1]) };
     $('setup-actions').innerHTML = '<button type="button" data-copy="sql">Copiar SQL</button>' +
@@ -707,6 +819,12 @@ document.addEventListener('click', async (event) => {
   if (!button) return;
   const { close, profile: selected, tab: nextTab, action, id, copy } = button.dataset;
   if (close) $(close).close();
+  if (button.id === 'profile-open' && ready) {
+    $('profile-name').value = state.names[slot];
+    $('profile-upgrade').hidden = true;
+    fieldError('profile-error');
+    $('profile-dialog').showModal();
+  }
   if (selected !== undefined && !shared) {
     slot = local.slot = Number(selected);
     storeLocal();
