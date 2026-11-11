@@ -770,10 +770,12 @@ function requestConfirmation(action, id, fromRoulette = false) {
   const wasPlaying = state.playing === id;
   const wasDone = Boolean(game.doneAt);
   if (action === 'back' && !wasPlaying && !wasDone) return notice('El juego ya está en el backlog.');
+  if (action === 'done' && wasDone) return notice('El juego ya está terminado.');
   const name = '«' + game.title + '»';
   const copy = action === 'start' ? ['Jugar siguiente', '¿Querés empezar a jugar ' + name + '? Se borrarán los votos actuales.', 'Jugar siguiente'] :
     action === 'back' ? ['Volver al backlog', wasPlaying ? '¿Querés devolver ' + name + ' al backlog?' :
       '¿Querés devolver ' + name + ' al backlog? Se borrarán sus puntajes.', 'Volver al backlog'] :
+    action === 'done' ? ['Marcar terminado', '¿Querés marcar ' + name + ' como terminado? Se borrarán sus votos y, si está en juego, se cerrará esa partida.', 'Marcar terminado'] :
       ['Quitar juego', '¿Querés quitar ' + name + ' del tablero? Se borrarán sus votos y puntajes.', 'Quitar juego'];
   pendingAction = { action, id, fromRoulette, wasPlaying, wasDone };
   $('confirm-title').textContent = copy[0];
@@ -997,12 +999,11 @@ document.addEventListener('click', async (event) => {
       fieldError('settings-error', 'El navegador bloqueó el portapapeles. Probá desde la página publicada por HTTPS.');
     }
   }
-  if (['start', 'back', 'ask-remove'].includes(action)) {
+  if (['start', 'back', 'done', 'ask-remove'].includes(action)) {
     requestConfirmation(action === 'ask-remove' ? 'remove' : action, id);
   } else if (action) {
     try {
       await mutate(action, { id, active: state.votes[slot] !== id });
-      if (action === 'done') notice('Marcado como terminado. Podés puntuarlo en Terminados.');
     } catch (error) { notice(error.message); }
   }
 });
@@ -1019,10 +1020,14 @@ $('confirm-action').addEventListener('click', async (event) => {
       pending.wasDone !== Boolean(state.games[pending.id]?.doneAt))) {
       throw new Error('El juego cambió de estado. Cerrá esta ventana y volvé a intentarlo.');
     }
+    if (pending.action === 'done' && state.games[pending.id]?.doneAt) {
+      throw new Error('El juego ya está terminado. Cerrá esta ventana para ver el tablero actualizado.');
+    }
     await mutate(pending.action, { id: pending.id });
     $('confirm-dialog').close();
     if (pending.fromRoulette) $('roulette-dialog').close();
     notice({ start: 'Juego elegido para la próxima partida.', back: 'Juego devuelto al backlog.',
+      done: 'Marcado como terminado. Podés puntuarlo en Terminados.',
       remove: 'Juego quitado.' }[pending.action]);
   } catch (error) {
     fieldError('confirm-error', error.message);
