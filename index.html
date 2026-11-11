@@ -39,6 +39,15 @@ main{padding-block:32px 56px}
 .hero h1{font-size:clamp(2.3rem,6vw,4.25rem);line-height:.99;margin:0 0 12px;letter-spacing:-.07em}
 .hero p{color:#d1d6c9;margin:0}
 .hero .button,.hero button{white-space:nowrap}
+.hero-actions{display:flex;gap:8px;flex-wrap:wrap}
+.roulette-dialog{width:min(660px,calc(100% - 26px))}
+.roulette-stage{position:relative;width:min(100%,440px);margin:16px auto 20px}
+.roulette-wheel{display:block;width:100%;height:auto;aspect-ratio:1;will-change:transform}
+.roulette-pointer{position:absolute;z-index:1;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:15px solid transparent;border-right:15px solid transparent;border-top:28px solid var(--accent);filter:drop-shadow(0 2px 3px #0009)}
+.roulette-result{min-height:1.6em;text-align:center;font-size:1.1rem;font-weight:700;overflow-wrap:anywhere}
+.roulette-actions{justify-content:center}
+.roulette-list{max-height:160px;overflow:auto;padding-left:2rem;font-size:.85rem;color:var(--muted)}
+.roulette-list li{margin-bottom:4px;overflow-wrap:anywhere}
 .profile-line{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:20px 0}
 .profile-line strong{font-size:.86rem;color:var(--muted)}
 .profiles button[aria-pressed="true"],.voted{background:#333d22;color:var(--accent);border-color:#62723c}
@@ -109,8 +118,8 @@ details .fields{margin-top:14px}
 </div></header>
 <main class="wrap">
   <section class="hero">
-    <div><h1>QueJuegoo</h1><p>Un backlog de Steam para dos.</p></div>
-    <button id="add-open" class="primary" type="button">＋ Agregar juego</button>
+    <div><h1>QueJuegoo</h1><p>Un backlog de Steam compartido.</p></div>
+    <div class="hero-actions"><button id="roulette-open" type="button">Girar ruleta</button><button id="add-open" class="primary" type="button">＋ Agregar juego</button></div>
   </section>
   <div id="profile-line" class="profile-line"></div>
   <div class="layout">
@@ -146,6 +155,14 @@ details .fields{margin-top:14px}
     </div>
     <p id="add-error" class="dialog-error" role="alert" hidden></p>
   </form>
+</dialog>
+<dialog id="roulette-dialog" class="roulette-dialog" aria-labelledby="roulette-title">
+  <div class="dialog-head"><h2 id="roulette-title">Ruleta del backlog</h2><button class="ghost" type="button" data-close="roulette-dialog" aria-label="Cerrar">✕</button></div>
+  <p class="hint">Todos los juegos del backlog tienen la misma probabilidad de salir.</p>
+  <div class="roulette-stage"><span class="roulette-pointer" aria-hidden="true"></span><canvas id="roulette-wheel" class="roulette-wheel" width="480" height="480" aria-label="Ruleta de juegos"></canvas></div>
+  <p id="roulette-result" class="roulette-result" role="status" aria-live="polite"></p>
+  <div class="actions roulette-actions"><button id="roulette-spin" class="primary" type="button">Girar</button><button id="roulette-start" type="button" hidden>Jugar este</button></div>
+  <ol id="roulette-list" class="roulette-list" aria-label="Juegos de la ruleta"></ol>
 </dialog>
 <dialog id="settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-head"><h2 id="settings-title">Configurar tablero</h2><button class="ghost" type="button" data-close="settings-dialog" aria-label="Cerrar">✕</button></div>
@@ -392,6 +409,10 @@ let polling = false;
 let toastTimer;
 let removeId;
 let installOutput;
+let rouletteGames = [];
+let rouletteChoice = null;
+let rouletteSpinning = false;
+let rouletteTimer;
 
 function status(message, online = false) {
   $('sync').textContent = message;
@@ -483,6 +504,78 @@ function gameRow(game) {
     '</div>' + (game.doneAt ? rating(game) : '') + '</div></article>';
 }
 
+function backlogGames() {
+  return Object.values(state.games).filter((game) => !game.doneAt && game.id !== state.playing);
+}
+
+function randomIndex(count) {
+  const range = 2 ** 32;
+  const limit = range - range % count;
+  let value;
+  do { value = crypto.getRandomValues(new Uint32Array(1))[0]; } while (value >= limit);
+  return value % count;
+}
+
+function updateRouletteStart() {
+  $('roulette-start').hidden = !rouletteChoice;
+  $('roulette-start').disabled = !ready || !rouletteChoice || Boolean(state.playing) ||
+    !backlogGames().some((game) => game.id === rouletteChoice.id);
+}
+
+function drawRoulette() {
+  const canvas = $('roulette-wheel');
+  const context = canvas.getContext('2d');
+  const size = canvas.width;
+  const center = size / 2;
+  const radius = center - 12;
+  const count = rouletteGames.length;
+  context.clearRect(0, 0, size, size);
+  if (!count) return;
+  const colors = ['#414f75', '#52643c', '#704858', '#32636a', '#685c38', '#654d7d', '#795142', '#3e6555'];
+  const arc = Math.PI * 2 / count;
+  rouletteGames.forEach((game, index) => {
+    const start = -Math.PI / 2 + index * arc;
+    context.beginPath();
+    context.moveTo(center, center);
+    context.arc(center, center, radius, start, start + arc);
+    context.closePath();
+    context.fillStyle = colors[index % colors.length];
+    context.fill();
+    context.strokeStyle = '#20232a';
+    context.lineWidth = 2;
+    context.stroke();
+    context.save();
+    context.translate(center, center);
+    context.rotate(start + arc / 2 + Math.PI / 2);
+    context.fillStyle = '#fff';
+    context.font = '700 ' + (count > 8 ? 18 : 15) + 'px Inter, Segoe UI, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    const title = Array.from(game.title);
+    context.fillText(count > 8 ? String(index + 1) : title.slice(0, 18).join('') + (title.length > 18 ? '…' : ''), 0, -radius * .58, radius * .65);
+    context.restore();
+  });
+  context.beginPath();
+  context.arc(center, center, 24, 0, Math.PI * 2);
+  context.fillStyle = '#e1fa75';
+  context.fill();
+  context.strokeStyle = '#20232a';
+  context.lineWidth = 4;
+  context.stroke();
+}
+
+function prepareRoulette() {
+  rouletteGames = backlogGames();
+  rouletteChoice = null;
+  $('roulette-result').textContent = rouletteGames.length ? '' : 'El backlog está vacío.';
+  $('roulette-spin').disabled = !ready || !rouletteGames.length;
+  $('roulette-list').innerHTML = rouletteGames.map((game) => '<li>' + escape(game.title) + '</li>').join('');
+  $('roulette-wheel').style.transition = 'none';
+  $('roulette-wheel').style.transform = 'rotate(0deg)';
+  drawRoulette();
+  updateRouletteStart();
+}
+
 function render() {
   $('add-open').disabled = !ready;
   $('profile-line').innerHTML = '<strong>Jugás como</strong><div class="profile-control"><div class="profiles">' +
@@ -493,6 +586,8 @@ function render() {
 
   const all = Object.values(state.games).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const queued = all.filter((game) => !game.doneAt && game.id !== state.playing);
+  $('roulette-open').disabled = !ready || !queued.length;
+  updateRouletteStart();
   const done = all.filter((game) => game.doneAt).sort((a, b) => Date.parse(b.doneAt) - Date.parse(a.doneAt));
   const list = { all, queued, done }[tab];
   $('all-count').textContent = all.length;
@@ -683,6 +778,50 @@ function openSettings() {
 }
 
 $('settings-open').addEventListener('click', openSettings);
+$('roulette-open').addEventListener('click', () => {
+  prepareRoulette();
+  $('roulette-dialog').showModal();
+});
+$('roulette-dialog').addEventListener('close', () => {
+  clearTimeout(rouletteTimer);
+  rouletteSpinning = false;
+});
+$('roulette-spin').addEventListener('click', () => {
+  if (rouletteSpinning || !ready) return;
+  prepareRoulette();
+  if (!rouletteGames.length) return;
+  rouletteSpinning = true;
+  const button = $('roulette-spin');
+  button.disabled = true;
+  $('roulette-result').textContent = 'Girando…';
+  const index = randomIndex(rouletteGames.length);
+  const degrees = 360 * 6 + 360 - (index + .5) * 360 / rouletteGames.length;
+  const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 4800;
+  const wheel = $('roulette-wheel');
+  void wheel.offsetWidth;
+  wheel.style.transition = 'transform ' + duration + 'ms cubic-bezier(.12,.72,.16,1)';
+  wheel.style.transform = 'rotate(' + degrees + 'deg)';
+  rouletteTimer = setTimeout(() => {
+    rouletteSpinning = false;
+    rouletteChoice = rouletteGames[index];
+    $('roulette-result').textContent = 'Salió: ' + rouletteChoice.title;
+    button.disabled = false;
+    updateRouletteStart();
+  }, duration);
+});
+$('roulette-start').addEventListener('click', async (event) => {
+  const game = rouletteChoice;
+  if (!game || event.currentTarget.disabled) return;
+  event.currentTarget.disabled = true;
+  try {
+    await mutate('start', { id: game.id });
+    $('roulette-dialog').close();
+    notice('Juego elegido para la próxima partida.');
+  } catch (error) {
+    updateRouletteStart();
+    notice(error.message);
+  }
+});
 $('add-open').addEventListener('click', () => {
   $('add-form').reset();
   $('steam-search').href = searchSteam('');
